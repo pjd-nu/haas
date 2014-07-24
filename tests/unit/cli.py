@@ -1,57 +1,68 @@
+"""Functional tests for cli.py"""
+
+# Notes:
+#
+
 from haas import model, api, cli
 import pytest
-
-import requests
-
-req_URI = ''
-req_method = ''
-req_data = ''
-req_status = 0
 
 from haas.config import cfg
 cfg.add_section('client')
 cfg.set('client', 'endpoint', 'http://abc:5000')
 
-class foo:
-    def __init__(self, rsp):
-        self.status_code = rsp
-        
-def do_put(url, data):
-    global req_URI, req_method, req_data
-    req_URI = url
-    req_method = 'PUT'
-    req_data = data
-    return foo(req_status)
+# Here's the fake HTTP infrastructure. Use monkeypatch to stash the method, url,
+# and data and return a fake status code, then return them when needed.
+#
+# will need updating to provide data results for query.
+#
+class FakeResponse:
+    method = None
+    url = None
+    data = None
+    
+    def __init__(self, method, url, data):
+        self.status_code = 200  # 200 OK
+        FakeResponse.method = method
+        FakeResponse.url = url
+        FakeResponse.data = data
 
-def do_delete(url):
-    global req_URI, req_method, req_data
-    req_URI = url
-    req_method = 'DELETE'
-    req_data = None
-    return foo(req_status)
+    def reset(self):
+        FakeResponse.method = None
+        FakeResponse.url = None
+        FakeResponse.data = None
 
-def do_post(url, data):
-    global req_URI, req_method, req_data
-    req_URI = url
-    req_method = 'POST'
-    req_data = data
-    return foo(req_status)
+    def check(self, method, url, values):
+        assert FakeResponse.method == method
+        assert FakeResponse.url == url
+        for key,value in values:
+            assert FakeResponse.data[key] == value
 
-def test_user_create(monkeypatch):
-    global req_status
-    monkeypatch.setattr(requests, 'put', do_put)
-    req_status = 200
-    cli.user_create('joe', 'password')
-    assert req_method == 'PUT'
-    assert req_URI == 'http://abc:5000/user/joe'
-    assert 'password' in req_data and req_data['password'] == 'password'
+@pytest.fixture(autouse=True)
+def no_requests(monkeypatch):
+    monkeypatch.setattr("requests.put", lambda url,data: FakeResponse('PUT', url, data))
+    monkeypatch.setattr("requests.delete", lambda url: FakeResponse('DELETE', url, None))
+    monkeypatch.setattr("requests.post", lambda url,data: FakeResponse('POST', url, data))
+    FakeResponse.reset()
 
-def test_network_create(monkeypatch):
-    global req_status
-    monkeypatch.setattr(requests, 'put', do_put)
-    req_status = 200
-    cli.network_create('net10', 'group1')
-    assert req_method == 'PUT'
-    assert req_URI == 'http://abc:5000/network/net10'
-    assert req_data['group'] == 'group1'
+# and now the tests. Note that these only test that (a) the cli functions don't
+# crash, and (b) the http parameters match what we expect.
+#
+class TestCLI:
+    def test_user_create(self):
+        cli.user_create('joe', 'password')
+        FakeResponse.check('PUT', 'http://abc:5000/user/joe', [('password', 'password')])
 
+        def test_network_create(self):
+            cli.network_create('net10', 'group1')
+            FakeResponse.check('PUT', 'http://abc:5000/network/net10', [('group', 'group1')])
+
+def network_delete(network):
+    pass
+
+def user_delete(username):
+    pass
+def group_add_user(group, user):
+
+def group_remove_user(group, user):
+
+def project_create(projectname, group, *args):
