@@ -1,14 +1,22 @@
-"""Functional tests for cli.py"""
-
-# Notes:
+# Copyright 2013-2014 Massachusetts Open Cloud Contributors
 #
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the
+# License.  You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an "AS
+# IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+# express or implied.  See the License for the specific language
+# governing permissions and limitations under the License.
+
+"""Unit tests for cli.py"""
 
 from haas import model, api, cli
 import pytest
-
 from haas.config import cfg
-cfg.add_section('client')
-cfg.set('client', 'endpoint', 'http://abc:5000')
 
 # Here's the fake HTTP infrastructure. Use monkeypatch to stash the method, url,
 # and data and return a fake status code, then return them when needed.
@@ -16,18 +24,22 @@ cfg.set('client', 'endpoint', 'http://abc:5000')
 # will need updating to provide data results for query.
 #
 class FakeResponse:
-    method = None
-    url = None
-    data = None
+    method = None               # 
+    url = None                  # static class variables
+    data = None                 # 
     
     def __init__(self, method, url, data):
-        self.status_code = 200  # 200 OK
-        FakeResponse.method = method
-        FakeResponse.url = url
-        FakeResponse.data = data
+        self.status_code = 200       # always return 200 OK
+        FakeResponse.method = method # 
+        FakeResponse.url = url       # class (not instance) variables
+        FakeResponse.data = data     # 
 
     @staticmethod
     def check(method, url, values):
+        """ checks method and URL.
+        'values': if None, verifies no data was sent.
+        if list of (name,value) pairs, verifies that each pair is in 'values'
+        """
         assert FakeResponse.method == method
         assert FakeResponse.url == url
         if values == None:
@@ -47,11 +59,14 @@ def no_requests(monkeypatch):
     monkeypatch.setattr("requests.post",
                         lambda url,data: FakeResponse('POST', url, data))
 
-# and now the tests. Note that these only test that (a) the cli functions don't
-# crash, and (b) the http parameters match what we expect.
-#
+cfg.add_section('client')
+cfg.set('client', 'endpoint', 'http://abc:5000')
 
 class TestCLI:
+    """ Test it.
+    Note that these only test that (a) the cli functions don't crash,
+    and (b) the http parameters match what we expect. 
+    """
     def test_user_create(self):
         cli.user_create('joe', 'password')
         FakeResponse.check('PUT', 'http://abc:5000/user/joe', 
